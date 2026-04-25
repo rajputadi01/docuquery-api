@@ -1,5 +1,6 @@
 package com.docuquery.api.controller;
 
+import com.docuquery.api.exception.CapacityExceededException;
 import com.docuquery.api.model.DocumentSummary;
 import com.docuquery.api.model.QueryRequest;
 import com.docuquery.api.model.QueryResponse;
@@ -19,17 +20,19 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final RAGService ragService;
-    private final com.docuquery.api.service.MetadataExtractor metadataExtractor;
 
-    // Updated Constructor
-    public DocumentController(DocumentService documentService, RAGService ragService, com.docuquery.api.service.MetadataExtractor metadataExtractor) {
+    public DocumentController(DocumentService documentService, RAGService ragService) {
         this.documentService = documentService;
         this.ragService = ragService;
-        this.metadataExtractor = metadataExtractor;
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<UploadResponse> uploadDocument(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<UploadResponse> uploadDocument(@RequestParam("file") MultipartFile file) 
+    {
+        if (documentService.getDocumentCount() >= 5) 
+        {
+            throw new CapacityExceededException("Server capacity reached. Maximum of 5 active documents allowed. Please delete an existing document first.");
+        }
         String documentId = documentService.processAndStoreDocument(file);
         UploadResponse response = new UploadResponse(
             documentId,
@@ -42,25 +45,32 @@ public class DocumentController {
     @PostMapping("/{id}/query")
     public ResponseEntity<QueryResponse> queryDocument(
             @PathVariable("id") String documentId,
-            @Valid @RequestBody QueryRequest request) { // @Valid enforces the @NotBlank rule
+            @Valid @RequestBody QueryRequest request) { 
         
-        // Guardrail: Will throw a 404 before hitting the AI if the ID is wrong
         documentService.verifyDocumentExists(documentId); 
         
-        String answer = ragService.queryDocument(documentId, request.question());
+        // RAGService now returns the fully populated QueryResponse object directly
+        QueryResponse response = ragService.queryDocument(documentId, request.question());
         
-        return ResponseEntity.ok(new QueryResponse(answer, documentId));
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}/summary")
     public ResponseEntity<DocumentSummary> getDocumentSummary(@PathVariable("id") String documentId) {
-        
-        // Guardrail: Will throw a 404 before hitting the AI if the ID is wrong
         documentService.verifyDocumentExists(documentId); 
-        
-        String rawText = documentService.getRawDocumentText(documentId);
-        DocumentSummary summary = metadataExtractor.extractMetadata(rawText);
-        
+        DocumentSummary summary = ragService.generateSummary(documentId);
         return ResponseEntity.ok(summary);
+    }
+
+    // NEW: Deletion Endpoint
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteDocument(@PathVariable("id") String documentId) {
+        // 1. Remove from DocumentService (Raw Text)
+        documentService.deleteDocument(documentId);
+        
+        // 2. Remove from RAGService (Caches, Memory, and apply Soft Delete)
+        ragService.deleteDocumentContext(documentId);
+        
+        return ResponseEntity.noContent().build(); // Returns a clean HTTP 204
     }
 }

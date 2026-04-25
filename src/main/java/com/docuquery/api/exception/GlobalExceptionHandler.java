@@ -74,4 +74,16 @@ public class GlobalExceptionHandler {
         );
         return new ResponseEntity<>(error, HttpStatus.PAYLOAD_TOO_LARGE);
     }
+    
+    @ExceptionHandler(CapacityExceededException.class)
+    public ResponseEntity<ErrorResponse> handleCapacityExceededException(CapacityExceededException ex) 
+    {
+        ErrorResponse error = new ErrorResponse(
+        	HttpStatus.TOO_MANY_REQUESTS.value(),
+            "Too many requests",
+            ex.getMessage(),
+            LocalDateTime.now()
+        );
+        return new ResponseEntity<>(error, HttpStatus.TOO_MANY_REQUESTS);
+    }
 }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.docuquery.api.exception.DocumentNotFoundException;
+import com.docuquery.api.model.DocumentSummary;
 
 import java.io.IOException;
 import java.util.List;
@@ -74,7 +75,7 @@ public class DocumentService {
 
             // 3. Chunking: Split the document into smaller pieces
             // Max 500 characters per chunk, with a 50-character overlap to preserve sentence context.
-            DocumentSplitter splitter = DocumentSplitters.recursive(500, 50);
+            DocumentSplitter splitter = DocumentSplitters.recursive(1000, 150);
             List<TextSegment> segments = splitter.split(document);
 
             // 4. Embedding: Send the chunks to Gemini to turn them into mathematical vectors
@@ -99,5 +100,14 @@ public class DocumentService {
     
     public String getRawDocumentText(String documentId) {
         return rawTextStore.get(documentId);
+    }
+    
+    public int getDocumentCount() {
+        return this.rawTextStore.size(); 
+    }
+    
+    public void deleteDocument(String documentId) {
+        verifyDocumentExists(documentId);
+        rawTextStore.remove(documentId);
     }
 }
