@@ -3,15 +3,19 @@ package com.docuquery.api.controller;
 import com.docuquery.api.exception.CapacityExceededException;
 import com.docuquery.api.model.DocumentSummary;
 import com.docuquery.api.model.QueryRequest;
-import com.docuquery.api.model.QueryResponse;
 import com.docuquery.api.model.UploadResponse;
 import com.docuquery.api.service.DocumentService;
 import com.docuquery.api.service.RAGService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
+import java.util.Map;
 
 @CrossOrigin(origins = "*")
 @RestController
@@ -42,17 +46,14 @@ public class DocumentController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @PostMapping("/{id}/query")
-    public ResponseEntity<QueryResponse> queryDocument(
+    // NEW: Produces TEXT_EVENT_STREAM for real-time SSE Streaming
+    @PostMapping(value = "/{id}/query", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter queryDocumentStream(
             @PathVariable("id") String documentId,
             @Valid @RequestBody QueryRequest request) { 
         
         documentService.verifyDocumentExists(documentId); 
-        
-        // RAGService now returns the fully populated QueryResponse object directly
-        QueryResponse response = ragService.queryDocument(documentId, request.question());
-        
-        return ResponseEntity.ok(response);
+        return ragService.queryDocumentStream(documentId, request.question());
     }
 
     @GetMapping("/{id}/summary")
@@ -62,15 +63,23 @@ public class DocumentController {
         return ResponseEntity.ok(summary);
     }
 
-    // NEW: Deletion Endpoint
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteDocument(@PathVariable("id") String documentId) {
-        // 1. Remove from DocumentService (Raw Text)
         documentService.deleteDocument(documentId);
-        
-        // 2. Remove from RAGService (Caches, Memory, and apply Soft Delete)
         ragService.deleteDocumentContext(documentId);
-        
-        return ResponseEntity.noContent().build(); // Returns a clean HTTP 204
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/chat/history")
+    public ResponseEntity<List<Map<String, String>>> getChatHistory(@PathVariable("id") String documentId) {
+        documentService.verifyDocumentExists(documentId);
+        return ResponseEntity.ok(ragService.getChatHistory(documentId));
+    }
+
+    @DeleteMapping("/{id}/chat/reset")
+    public ResponseEntity<Void> resetChat(@PathVariable("id") String documentId) {
+        documentService.verifyDocumentExists(documentId);
+        ragService.resetChatSession(documentId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
     // 4. Handles validation failures (e.g., when @NotBlank triggers on QueryRequest)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        // Extract the specific message we defined in the DTO (e.g., "Question cannot be empty")
+        // Extract the specific message we defined in the DTO
         String errorMessage = ex.getBindingResult().getAllErrors().get(0).getDefaultMessage();
         
         ErrorResponse error = new ErrorResponse(
@@ -63,7 +63,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
-    // 5. Handles massive file uploads that breach our application.properties limits
+    // 5. Handles massive file uploads
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxSizeException(MaxUploadSizeExceededException ex) {
         ErrorResponse error = new ErrorResponse(
@@ -75,15 +75,28 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.PAYLOAD_TOO_LARGE);
     }
     
+    // 6. Handles server capacity limits
     @ExceptionHandler(CapacityExceededException.class)
     public ResponseEntity<ErrorResponse> handleCapacityExceededException(CapacityExceededException ex) 
     {
         ErrorResponse error = new ErrorResponse(
-        	HttpStatus.TOO_MANY_REQUESTS.value(),
+            HttpStatus.TOO_MANY_REQUESTS.value(),
             "Too many requests",
             ex.getMessage(),
             LocalDateTime.now()
         );
         return new ResponseEntity<>(error, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    // 7. NEW: Handles prompt injection attempts
+    @ExceptionHandler(PromptInjectionException.class)
+    public ResponseEntity<ErrorResponse> handlePromptInjection(PromptInjectionException ex) {
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.BAD_REQUEST.value(),
+            "Security Policy Violation",
+            ex.getMessage(),
+            LocalDateTime.now()
+        );
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 }
